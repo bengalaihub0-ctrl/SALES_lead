@@ -1,0 +1,62 @@
+"""Command-line interface for the lead generation agent.
+
+Example:
+    python main.py --pincode 700075 --domain restaurant --min-records 20
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+import config
+import places
+from lead_generator import collect_leads
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Local business lead generation agent")
+    parser.add_argument("--pincode", required=True, help="Postal/pin code to search")
+    parser.add_argument(
+        "--domain",
+        required=True,
+        help="Business category, for example: restaurant, gym, salon",
+    )
+    parser.add_argument(
+        "--min-records",
+        type=int,
+        default=config.MIN_RECORDS,
+        help="Minimum number of records to attempt",
+    )
+    args = parser.parse_args()
+
+    def print_progress(event: dict) -> None:
+        if event.get("stage") in {"searching", "processing"}:
+            print(
+                f"Page {event.get('current_page', 0)} | "
+                f"Leads: {len(event.get('records') or [])} | "
+                f"Candidates: {event.get('total_candidates', 0)}",
+                end="\r",
+                flush=True,
+            )
+
+    try:
+        result = collect_leads(
+            args.pincode,
+            args.domain,
+            args.min_records,
+            progress_callback=print_progress,
+            export_excel=True,
+        )
+    except (ValueError, places.PlacesAPIError) as exc:
+        print(f"\nError: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+    print()
+    print(result["message"])
+    if result["output_path"]:
+        print(f"Excel file: {result['output_path']}")
+
+
+if __name__ == "__main__":
+    main()
